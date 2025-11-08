@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto EMA50 Checker - All Coins Mobile</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 10px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+  th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+  th { background-color: #333; color: white; }
+  .above { background-color: #a0e7a0; }
+  .below { background-color: #f7a0a0; }
+  button { padding: 8px 16px; font-size: 14px; cursor: pointer; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h2>Crypto EMA50 Checker - All Coins (4h)</h2>
+<button onclick="updateEMA()">تحلیل EMA50</button>
+<table id="cryptoTable">
+  <thead>
+    <tr><th>Symbol</th><th>Price (USD)</th><th>EMA50 Status</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+async function getAllCoins() {
+  const res = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false');
+  const data = await res.json();
+  return data.map(c => c.id);
+}
+
+async function getCoinData(coin) {
+  try {
+    const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart?vs_currency=usd&days=30&interval=hourly`);
+    const data = await res.json();
+    const prices = data.prices.map(p => p[1]);
+    return prices;
+  } catch(e) {
+    return null;
+  }
+}
+
+function calculateEMA(prices, period = 50) {
+  let k = 2 / (period + 1);
+  let emaArray = [prices[0]];
+  for (let i = 1; i < prices.length; i++) {
+    emaArray.push(prices[i]*k + emaArray[i-1]*(1-k));
+  }
+  return emaArray;
+}
+
+async function updateEMA() {
+  const tbody = document.querySelector('#cryptoTable tbody');
+  tbody.innerHTML = '<tr><td colspan="3">در حال بارگذاری...</td></tr>';
+
+  const coins = await getAllCoins();
+  tbody.innerHTML = '';
+
+  for (let coin of coins) {
+    const prices = await getCoinData(coin);
+    if (!prices || prices.length < 50) continue;
+    const ema50 = calculateEMA(prices, 50);
+    const lastPrice = prices[prices.length-1];
+    const status = lastPrice >= ema50[ema50.length-1] ? 'بالای EMA50' : 'زیر EMA50';
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${coin.toUpperCase()}</td>
+      <td>${lastPrice.toFixed(2)}</td>
+      <td class='${lastPrice >= ema50[ema50.length-1] ? 'above' : 'below'}'>${status}</td>
+    `;
+    tbody.appendChild(row);
+    await new Promise(r => setTimeout(r, 50)); // تاخیر کوتاه برای جلوگیری از لود سنگین
+  }
+}
+</script>
+</body>
+</html>
